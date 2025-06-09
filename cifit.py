@@ -1,5 +1,7 @@
 import numpy as np
 import argparse
+from lmfit import Parameters, minimize, report_fit
+import csv
 
 
 def read_mch_params(lines, n_expected, specify_vary=False):
@@ -15,7 +17,7 @@ def read_mch_params(lines, n_expected, specify_vary=False):
     assert len(param_guess) == n_expected
 
     if specify_vary:
-        param_vary = list(map(bool, next(lines).split()))
+        param_vary = list(map(bool, map(int, next(lines).split())))
         assert len(param_vary) == n_expected
     else:
         param_vary = None
@@ -54,13 +56,14 @@ def read_mch_file(filename, specify_vary=False):
         if specify_vary:
             k_guess_str, k_vary_str = next(lines).split()
             k_guess = float(k_guess_str)
-            k_vary = bool(k_vary_str)
+            k_vary = bool(int(k_vary_str))
         else:
             k_guess = float(next(lines))
             k_vary = None
 
         # Initialize diagonal matrix for the process
-        m = np.diag(np.ones(n_sites))
+        # exch_mat = np.diag(np.ones(n_sites))
+        exch_mat = np.zeros((n_sites, n_sites))
 
         # Read the nonzero off-diagonals associated with the process,
         # and add them to the matrix
@@ -70,12 +73,12 @@ def read_mch_file(filename, specify_vary=False):
             row = int(row_str)  # Row of off-diagonal element
             col = int(col_str)  # Column of off-diagonal element
             val = -float(val_str)  # Invert sign as per original code
-            m[row, col] = val
+            exch_mat[row, col] = val
 
         process = {
             'k_guess': k_guess,
             'k_vary': k_vary,
-            'matrix': m
+            'matrix': exch_mat
         }
         processes.append(process)
 
@@ -103,23 +106,33 @@ def read_mch_file(filename, specify_vary=False):
         for i, proc in enumerate(processes):
             proc['k_vary'] = k_vary[i]
 
-    mch_dict = {
+    const_dict = {
         'title': mech_title,
         'n_sites': n_sites,
         'n_procs': n_procs,
+        'matrices': []
+    }
+
+    # TODO: Remove 'guess' from key names
+    pars_dict = {
         'r1_guess': r1_guess,
         'r1_vary': r1_vary,
         'minf_guess': minf_guess,
         'minf_vary': minf_vary,
         'm0_guess': m0_guess,
         'm0_vary': m0_vary,
-        'processes': processes
+        'k_guess': [],
+        'k_vary': []
     }
+    for proc in processes:
+        pars_dict['k_guess'].append(proc['k_guess'])
+        pars_dict['k_vary'].append(proc['k_vary'])
+        const_dict['matrices'].append(proc['matrix'])
 
     assert all(type(vary) is bool for vary in r1_vary + minf_vary + m0_vary), \
         "All vary parameters should be boolean values."
 
-    return mch_dict
+    return const_dict, pars_dict
 
 
 def read_data_file(filename):
@@ -147,35 +160,191 @@ def read_data_file(filename):
         # Remaining elements are the magnetization values
         data_values.append(list(map(float, line[1:])))
 
-    # Transpose to get magnetizations per site
-    magnetizations = np.array(data_values).T
-
     return {
         'title': data_title,
         'n_points': n_points,
         'time_points': time_points,
-        'magnetizations': magnetizations
+        'magnetizations': np.array(data_values)
     }
 
 
-def print_parameters(par_dict):
-    print(f"Number of sites: {par_dict['n_sites']}")
-    for i in range(par_dict['n_sites']):
+def print_parameters(const_dict, pars_dict):
+    print(f"Number of sites: {const_dict['n_sites']}")
+    for i in range(const_dict['n_sites']):
         print(f"Site {i+1}:")
-        print(f"  R1 relaxation rate: {par_dict['r1_guess'][i]:.4f}, "
-              "vary: {par_dict['r1_vary'][i]}")
-        print(f"  M_inf: {par_dict['minf_guess'][i]}, "
-              "vary: {par_dict['minf_vary'][i]}")
-        print(f"  M_0: {par_dict['m0_guess'][i]}, "
-              "vary: {par_dict['m0_vary'][i]}")
+        print(f"  R1 relaxation rate: {pars_dict['r1_guess'][i]:.4f}, "
+              f"vary: {pars_dict['r1_vary'][i]}")
+        print(f"  M_inf: {pars_dict['minf_guess'][i]}, "
+              f"vary: {pars_dict['minf_vary'][i]}")
+        print(f"  M_0: {pars_dict['m0_guess'][i]}, "
+              f"vary: {pars_dict['m0_vary'][i]}")
         print()
 
-    print(f"Number of processes: {par_dict['n_procs']}")
-    for i, proc in enumerate(par_dict['processes']):
-        print(f"Process {i+1}: k = {proc['k_guess']}, vary = {proc['k_vary']}")
+    print(f"Number of processes: {const_dict['n_procs']}")
+    for i in range(const_dict['n_procs']):
+        print(f"Process {i+1}: k = {pars_dict['k_guess'][i]}, "
+              f"vary = {pars_dict['k_vary'][i]}")
         print("Process matrix:")
-        print(proc['matrix'])
+        print(const_dict['matrices'][i])
         print()
+
+
+def model_magnetization(params, const_dict, time_points):
+    """
+    Compute the model magnetization for all time points and sites.
+
+    params: lmfit.Parameters object
+    const_dict: mechanism dictionary
+    time_points: list of time points to calculate magnetization for
+
+    Returns: 2D array of calculated magnetizations.
+    """
+
+    n_sites = const_dict['n_sites']
+    n_procs = const_dict['n_procs']
+    time_points = np.array(time_points)
+    n_points = len(time_points)
+
+    # Unpack parameters from lmfit Parameters object
+    r1 = np.array([params[f"r1_{i}"] for i in range(n_sites)])
+    minf = np.array([params[f"minf_{i}"] for i in range(n_sites)])
+    m0minf = np.array([params[f"m0_{i}"] for i in range(n_sites)])-minf
+    rates = np.array([params[f"rate_{i}"] for i in range(n_procs)])
+
+    # Build exchange matrix for each process and sum
+    exch_mat = np.zeros((n_sites, n_sites))
+    for i, mat in enumerate(const_dict['matrices']):
+        exch_mat += mat * rates[i]
+
+    # Add relaxation rates to diagonal
+    for i in range(n_sites):
+        exch_mat[i, i] += r1[i]
+        # Does the sum of the off-diagonals need to be added here?
+
+    # Eigen decomposition
+    eigvals, eigvecs = np.linalg.eig(exch_mat)
+    eigvecs_inv = np.linalg.inv(eigvecs)
+
+    # Calculate magnetization for each time point and site
+    mags = np.zeros((n_points, n_sites))
+    for i, t in enumerate(time_points):
+        exp_diag = np.diag(np.exp(-eigvals * t))
+        mags[i, :] = eigvecs @ exp_diag @ eigvecs_inv @ m0minf + minf
+
+    return mags
+
+
+def sir_residuals(params, const_dict, data_dict):
+    time_points = data_dict['time_points']
+    mags = model_magnetization(params, const_dict, time_points).flatten()
+    obs = np.array(data_dict['magnetizations']).flatten()
+    return obs - mags
+
+
+def do_fit(const_dict, pars_dict, data_dict):
+    """
+    Perform the nonlinear least squares fit using lmfit.
+    """
+
+    n_sites = const_dict['n_sites']
+    n_procs = const_dict['n_procs']
+
+    # Build lmfit Parameters object
+    params = Parameters()
+    for i in range(n_sites):
+        params.add(f"r1_{i}", value=pars_dict['r1_guess'][i],
+                   vary=pars_dict['r1_vary'][i])
+        params.add(f"minf_{i}", value=pars_dict['minf_guess'][i],
+                   vary=pars_dict['minf_vary'][i])
+        params.add(f"m0_{i}", value=pars_dict['m0_guess'][i],
+                   vary=pars_dict['m0_vary'][i])
+    for i in range(n_procs):
+        params.add(f"rate_{i}", value=pars_dict['k_guess'][i],
+                   vary=pars_dict['k_vary'][i])
+
+    # Run minimization
+    result = minimize(sir_residuals, params, args=(const_dict, data_dict),
+                      method='leastsq')  # Use Levenberg-Marquardt minimization
+
+    # Print fit report
+    report_fit(result)
+
+    # Update pars_dict with fitted values
+    for i in range(n_sites):
+        pars_dict['r1_guess'][i] = result.params[f"r1_{i}"].value
+        pars_dict['minf_guess'][i] = result.params[f"minf_{i}"].value
+        pars_dict['m0_guess'][i] = result.params[f"m0_{i}"].value
+    for i in range(n_procs):
+        pars_dict['k_guess'][i] = result.params[f"rate_{i}"].value
+
+    data_dict['calculated_magnetizations'] = model_magnetization(
+        result.params, const_dict, data_dict['time_points'])
+
+    return result
+
+
+def calc_mags(const_dict, pars_dict, time_points):
+    """
+    Calculate the magnetizations for all time points and sites.
+    Returns a 2D array of calculated magnetizations.
+    """
+
+    params = Parameters()
+    for i in range(const_dict['n_sites']):
+        params.add(f"r1_{i}", value=pars_dict['r1_guess'][i],
+                   vary=pars_dict['r1_vary'][i])
+        params.add(f"minf_{i}", value=pars_dict['minf_guess'][i],
+                   vary=pars_dict['minf_vary'][i])
+        params.add(f"m0_{i}", value=pars_dict['m0_guess'][i],
+                   vary=pars_dict['m0_vary'][i])
+    for i in range(const_dict['n_procs']):
+        params.add(f"rate_{i}", value=pars_dict['k_guess'][i],
+                   vary=pars_dict['k_vary'][i])
+
+    return model_magnetization(params, const_dict, time_points)
+
+
+def write_to_csv(filename, const_dict, pars_dict, data_dict):
+    """
+    Write calculated, observed, and difference values, plus a smooth curve,
+    to a CSV file.
+    """
+
+    with open(filename, "w", newline="") as csvfile:
+        # writer = csv.writer(csvfile, delimiter='')
+        # writer.writerow(["Calculated, Observed, and Difference Values"])
+        csvfile.write("Calculated, Observed, and Difference Values\n")
+
+        calc = data_dict['calculated_magnetizations']
+        for i, time in enumerate(data_dict['time_points']):
+            row = f"{time:8.5f}, "
+
+            # Calculated
+            for j in range(const_dict['n_sites']):
+                row += f" {calc[i, j]:8.4f}, "
+            # Observed
+            for j in range(const_dict['n_sites']):
+                row += f" {data_dict['magnetizations'][i, j]:8.4f}, "
+            # Differences
+            for j in range(const_dict['n_sites']):
+                row += f" {calc[i, j] - data_dict['magnetizations'][i, j]:8.4f}, "
+            csvfile.write(row + '\n')
+            # writer.writerow(row)
+
+        # Smooth curve
+        csvfile.write("\nCalculated Smooth Curve\n")
+
+        time_0 = 0.0
+        time_f = data_dict['time_points'][-1]
+        times_smooth = np.linspace(time_0, time_f, 101)[np.newaxis]
+        mags_smooth = calc_mags(const_dict, pars_dict, times_smooth.flatten())
+
+        smooth_data = np.concatenate((times_smooth.T, mags_smooth), axis=1)
+        for smooth_row in smooth_data:
+            csvfile.write(f"{smooth_row[0]:8.5f}, ")
+            for val in smooth_row[1:]:
+                csvfile.write(f" {val:8.4f}, ")
+            csvfile.write('\n')
 
 
 def parse_args():
@@ -195,6 +364,7 @@ def main():
     data_filename = f"{args.filename}.dat"
     mech_filename = f"{args.filename}.mch"
     out_filename = f"{args.filename}.out"
+    csv_filename = f"{args.filename}_new.csv"
 
     # Check if files exist and are readable/writable
     try:
@@ -214,14 +384,17 @@ def main():
         print(f"Error creating output file: {e}")
         return 1
 
-    # Read mechanism file
-    mch_dict = read_mch_file(mech_filename, specify_vary=args.specify_vary)
-    print(mch_dict)
-
-    # Read data file
+    # Read mechanism and data files
+    const_dict, pars_dict = read_mch_file(mech_filename,
+                                          specify_vary=args.specify_vary)
     data_dict = read_data_file(data_filename)
+    print_parameters(const_dict, pars_dict)
 
-    print_parameters(mch_dict)
+    do_fit(const_dict, pars_dict, data_dict)
+
+    print("Fitting complete. Results:")
+    print_parameters(const_dict, pars_dict)
+    write_to_csv(csv_filename, const_dict, pars_dict, data_dict)
 
 
 if __name__ == "__main__":
