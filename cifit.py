@@ -1,7 +1,8 @@
 import numpy as np
 import argparse
 from lmfit import Parameters, minimize, report_fit
-import csv
+import pandas as pd
+import matplotlib.pyplot as plt
 
 
 def read_mch_params(lines, n_expected, specify_vary=False):
@@ -219,7 +220,9 @@ def model_magnetization(params, const_dict, time_points):
     # Add relaxation rates to diagonal
     for i in range(n_sites):
         exch_mat[i, i] += r1[i]
-        # Does the sum of the off-diagonals need to be added here?
+        for j in range(n_sites):
+            if j != i:
+                exch_mat[i, i] -= exch_mat[i, j]
 
     # Eigen decomposition
     eigvals, eigvecs = np.linalg.eig(exch_mat)
@@ -253,14 +256,16 @@ def do_fit(const_dict, pars_dict, data_dict):
     params = Parameters()
     for i in range(n_sites):
         params.add(f"r1_{i}", value=pars_dict['r1_guess'][i],
-                   vary=pars_dict['r1_vary'][i])
+                   vary=pars_dict['r1_vary'][i], max=100*pars_dict['r1_guess'][i],
+                   min=0)
         params.add(f"minf_{i}", value=pars_dict['minf_guess'][i],
-                   vary=pars_dict['minf_vary'][i])
+                   vary=pars_dict['minf_vary'][i], max=1.2,
+                   min=0.88)
         params.add(f"m0_{i}", value=pars_dict['m0_guess'][i],
-                   vary=pars_dict['m0_vary'][i])
+                   vary=pars_dict['m0_vary'][i], max=pars_dict['minf_guess'][i], min=-pars_dict['minf_guess'][i])
     for i in range(n_procs):
         params.add(f"rate_{i}", value=pars_dict['k_guess'][i],
-                   vary=pars_dict['k_vary'][i])
+                   vary=pars_dict['k_vary'][i], max=100*pars_dict['k_guess'][i], min=0)
 
     # Run minimization
     result = minimize(sir_residuals, params, args=(const_dict, data_dict),
@@ -390,8 +395,10 @@ def main():
     data_dict = read_data_file(data_filename)
     print_parameters(const_dict, pars_dict)
 
+    # Run fitting
     do_fit(const_dict, pars_dict, data_dict)
 
+    # Output results
     print("Fitting complete. Results:")
     print_parameters(const_dict, pars_dict)
     write_to_csv(csv_filename, const_dict, pars_dict, data_dict)
