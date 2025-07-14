@@ -1,8 +1,7 @@
-import numpy as np
 import argparse
+
+import numpy as np
 from lmfit import Parameters, minimize, report_fit
-import pandas as pd
-import matplotlib.pyplot as plt
 
 
 def read_mch_params(lines, n_expected, specify_vary=False):
@@ -256,16 +255,19 @@ def do_fit(const_dict, pars_dict, data_dict):
     params = Parameters()
     for i in range(n_sites):
         params.add(f"r1_{i}", value=pars_dict['r1_guess'][i],
-                   vary=pars_dict['r1_vary'][i], max=100*pars_dict['r1_guess'][i],
-                   min=0)
+                   vary=pars_dict['r1_vary'][i],
+                   max=100*pars_dict['r1_guess'][i], min=0)
         params.add(f"minf_{i}", value=pars_dict['minf_guess'][i],
                    vary=pars_dict['minf_vary'][i], max=1.2,
                    min=0.88)
         params.add(f"m0_{i}", value=pars_dict['m0_guess'][i],
-                   vary=pars_dict['m0_vary'][i], max=pars_dict['minf_guess'][i], min=-pars_dict['minf_guess'][i])
+                   vary=pars_dict['m0_vary'][i],
+                   max=pars_dict['minf_guess'][i],
+                   min=-pars_dict['minf_guess'][i])
     for i in range(n_procs):
         params.add(f"rate_{i}", value=pars_dict['k_guess'][i],
-                   vary=pars_dict['k_vary'][i], max=100*pars_dict['k_guess'][i], min=0)
+                   vary=pars_dict['k_vary'][i],
+                   max=100*pars_dict['k_guess'][i], min=0)
 
     # Run minimization
     result = minimize(sir_residuals, params, args=(const_dict, data_dict),
@@ -332,7 +334,8 @@ def write_to_csv(filename, const_dict, pars_dict, data_dict):
                 row += f" {data_dict['magnetizations'][i, j]:8.4f}, "
             # Differences
             for j in range(const_dict['n_sites']):
-                row += f" {calc[i, j] - data_dict['magnetizations'][i, j]:8.4f}, "
+                diff = calc[i, j] - data_dict['magnetizations'][i, j]
+                row += f" {diff:8.4f}, "
             csvfile.write(row + '\n')
             # writer.writerow(row)
 
