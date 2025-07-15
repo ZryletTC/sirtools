@@ -1,7 +1,11 @@
+#!/usr/bin/env python3
+
 import argparse
 
 import numpy as np
 from lmfit import Parameters, minimize, report_fit
+
+VERSION = "0.1"  # TODO: Update to dynamic versioning from package
 
 
 def read_mch_params(lines, n_expected, specify_vary=False):
@@ -368,11 +372,12 @@ def parse_args():
 
 def main():
     args = parse_args()
+    print(f"sirfit {VERSION}")
 
     data_filename = f"{args.filename}.dat"
     mech_filename = f"{args.filename}.mch"
     out_filename = f"{args.filename}.out"
-    csv_filename = f"{args.filename}_new.csv"
+    csv_filename = f"{args.filename}.csv"
 
     # Check if files exist and are readable/writable
     try:
@@ -385,9 +390,13 @@ def main():
         return 1
 
     try:
-        with open(out_filename, 'w'):
-            pass
-        print(f"Output file: {out_filename}")
+        with open(out_filename, 'w') as outfile:
+            outfile.write(f"sirfit {VERSION}")
+            outfile.write(f"Mechanism file: {mech_filename}")
+            outfile.write(f"Data file: {data_filename}")
+
+            # print(f"Output file: {out_filename}")
+
     except Exception as e:
         print(f"Error creating output file: {e}")
         return 1
