@@ -189,7 +189,7 @@ def print_parameters(const_dict, pars_dict):
         print(f"Process {i+1}: k = {pars_dict['k_guess'][i]}, "
               f"vary = {pars_dict['k_vary'][i]}")
         print("Process matrix:")
-        print(const_dict['matrices'][i])
+        print(const_dict['matrices'][i])  # TODO: Add the diagonal elements
         print()
 
 
@@ -359,11 +359,16 @@ def write_to_csv(filename, const_dict, pars_dict, data_dict):
             csvfile.write('\n')
 
 
+def ask_for_filenames():
+    # TODO: Add code to ask for filenames if not provided
+    raise NotImplementedError
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="CIFIT: A program for fitting"
                                      " selective inversion experiment data.")
-    parser.add_argument("filename", help="Name of .dat and .mch files to"
-                        " process, and of .out file to write.")
+    parser.add_argument("filename", nargs='?', help="Name of .dat and .mch "
+                        "files to process, and of .out file to write.")
     parser.add_argument("--specify-vary", action="store_true",
                         help="Specify whether parameters should vary"
                              " during fitting inside the .mch file.")
@@ -374,10 +379,14 @@ def main():
     args = parse_args()
     print(f"sirfit {VERSION}")
 
-    data_filename = f"{args.filename}.dat"
-    mech_filename = f"{args.filename}.mch"
-    out_filename = f"{args.filename}.out"
-    csv_filename = f"{args.filename}.csv"
+    if args.filename:
+        data_filename = f"{args.filename}.dat"
+        mech_filename = f"{args.filename}.mch"
+        out_filename = f"{args.filename}.out"
+        csv_filename = f"{args.filename}.csv"
+    else:
+        (data_filename, mech_filename, out_filename,
+         csv_filename) = ask_for_filenames()
 
     # Check if files exist and are readable/writable
     try:
