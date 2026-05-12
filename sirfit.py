@@ -2,7 +2,9 @@
 
 import argparse
 
+import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import scipy
 from lmfit import Parameters, minimize, report_fit
 
@@ -449,6 +451,49 @@ def parse_args():
     return parser.parse_args()
 
 
+def plot_cifit_csv(filepath, nsites=2, names=[], data_rows=16, fit_rows=1001,
+                   savepath="", rates=[]):
+    cols = ['delay']
+    cols.extend(map(str, range(nsites*3)))
+    data_df = pd.read_csv(filepath, nrows=data_rows, skiprows=1, header=None,
+                          index_col=False, names=cols+['empty'], usecols=cols)
+    # print('DATA_DF')
+    # print(data_df)
+
+    cols = ['delay']
+    cols.extend(map(str, range(nsites)))
+    fit_df = pd.read_csv(filepath, nrows=fit_rows, skiprows=3+data_rows,
+                         header=None, index_col=False, names=cols+['empty'],
+                         usecols=cols)
+
+    # print('FIT_DF')
+    # print(fit_df)
+
+    if len(names) == 0:
+        names = [f'Site {i+1}' for i in range(nsites)]
+
+    fig, ax = plt.subplots()
+    for i in range(nsites):
+        pts = ax.plot(data_df['delay'], data_df[str(nsites+i)], '.',
+                      label=names[i]+' Data')
+        ax.plot(fit_df['delay'], fit_df[str(i)], label=names[i]+' Calc',
+                color=pts[0].get_color())
+
+    for rate in rates:
+        k = float(rate)
+        # print(k)
+        ax.text(0.9, 0.5, f'Rate = {k:.4f} Hz', horizontalalignment='right',
+                transform=ax.transAxes)
+
+    ax.legend()
+
+    plt.tight_layout()
+    if not savepath:
+        savepath = filepath.replace('.csv', '.pdf')
+    plt.savefig(savepath)
+    plt.show()
+
+
 def main():
     args = parse_args()
     print(f"sirfit {VERSION}")
@@ -506,6 +551,10 @@ def main():
     if make_csv:
         csv_filename = ask_for_filename("Plot file", "w")
         write_to_csv(csv_filename, const_dict, pars_dict, data_dict)
+
+    # TODO: Replace with generic names
+    plot_cifit_csv(csv_filename, names=['LPSC', 'LZC'],
+                   rates=pars_dict['k_guess'])
 
 
 if __name__ == "__main__":
