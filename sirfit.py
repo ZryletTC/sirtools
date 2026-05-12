@@ -66,7 +66,6 @@ def read_mch_file(filename, specify_vary=False):
             k_vary = None
 
         # Initialize diagonal matrix for the process
-        # exch_mat = np.diag(np.ones(n_sites))
         exch_mat = np.zeros((n_sites, n_sites))
 
         # Read the nonzero off-diagonals associated with the process,
@@ -189,7 +188,7 @@ def print_parameters(const_dict, pars_dict):
         print(f"Process {i+1}: k = {pars_dict['k_guess'][i]}, "
               f"vary = {pars_dict['k_vary'][i]}")
         print("Process matrix:")
-        print(const_dict['matrices'][i])  # TODO: Add the diagonal elements
+        print(const_dict['matrices'][i])
         print()
 
 
@@ -218,7 +217,7 @@ def model_magnetization(params, const_dict, time_points):
     # Build exchange matrix for each process and sum
     exch_mat = np.zeros((n_sites, n_sites))
     for i, mat in enumerate(const_dict['matrices']):
-        exch_mat += mat * rates[i]
+        exch_mat += mat * rates[i]  # Off-diagonal are negative!
 
     # Add relaxation rates to diagonal
     for i in range(n_sites):
