@@ -313,11 +313,31 @@ def calc_mags(const_dict, pars_dict, time_points):
     return model_magnetization(params, const_dict, time_points)
 
 
+def ask_for_filename(prompt, mode):
+    # TODO: Future -- Keep asking for filename if it fails
+    filename = input(prompt + ": ")
+
+    try:
+        with open(filename, mode):
+            pass
+    except OSError:
+        print(f"cannot open file {prompt} .")
+        exit(1)
+
+    return filename
+
+
 def write_to_csv(filename, const_dict, pars_dict, data_dict):
     """
     Write calculated, observed, and difference values, plus a smooth curve,
     to a CSV file.
     """
+    # TODO: Future -- Remove this question and just output a good fit
+    user_vals = []
+    user_vals.extend(map(float, input("Enter start time, final time, increment:")))
+    while len(user_vals) < 3:
+        user_vals.extend(map(float, input("")))
+    start, end, inc = user_vals[:3]
 
     with open(filename, "w", newline="") as csvfile:
         # writer = csv.writer(csvfile, delimiter='')
@@ -355,11 +375,6 @@ def write_to_csv(filename, const_dict, pars_dict, data_dict):
             for val in smooth_row[1:]:
                 csvfile.write(f" {val:8.4f}, ")
             csvfile.write('\n')
-
-
-def ask_for_filenames():
-    # TODO: Add code to ask for filenames if not provided
-    raise NotImplementedError
 
 
 def write_to_out(filename, const_dict, pars_dict, data_dict, fit_result=None):
@@ -433,23 +448,26 @@ def main():
     print(f"sirfit {VERSION}")
 
     if args.filename:
-        data_filename = f"{args.filename}.dat"
         mech_filename = f"{args.filename}.mch"
+        data_filename = f"{args.filename}.dat"
         out_filename = f"{args.filename}.out"
-        csv_filename = f"{args.filename}.csv"
-    else:
-        (data_filename, mech_filename, out_filename,
-         csv_filename) = ask_for_filenames()
+        # TODO: Future -- plot to same root filename
+        # csv_filename = f"{args.filename}.csv"
 
-    # Check if files exist and are readable/writable
-    try:
-        with open(data_filename, 'r'), open(mech_filename, 'r'):
-            pass
-        print(f"Mechanism file: {mech_filename}")
-        print(f"Data file: {data_filename}")
-    except Exception as e:
-        print(f"Error opening files: {e}")
-        return 1
+        # Check if files exist and are readable/writable
+        try:
+            with open(data_filename, 'r'), open(mech_filename, 'r'):
+                pass
+            print(f"Mechanism file: {mech_filename}")
+            print(f"Data file: {data_filename}")
+        except Exception as e:
+            print(f"Error opening files: {e}")
+            return 1
+    else:
+        mech_filename = ask_for_filename("Mechanism file", "r")
+        data_filename = ask_for_filename("Data file", "r")
+        out_filename = ask_for_filename("Output file", "w")
+        # csv_filename = None
 
     try:
         with open(out_filename, 'w') as outfile:
@@ -475,7 +493,13 @@ def main():
     # Output results
     print("Fitting complete. Results:")
     print_parameters(const_dict, pars_dict)
-    write_to_csv(csv_filename, const_dict, pars_dict, data_dict)
+
+    # Write csv "plot" file if desired
+    make_csv = input("Do you want to calculate a plot file? (y/n):")
+    # if ((make_csv[0] == 'y') || (make_csv[0] == 'Y'))
+    if make_csv:
+        csv_filename = ask_for_filename("Plot file", "w")
+        write_to_csv(csv_filename, const_dict, pars_dict, data_dict)
 
 
 if __name__ == "__main__":
