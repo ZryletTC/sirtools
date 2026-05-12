@@ -363,6 +363,61 @@ def ask_for_filenames():
     raise NotImplementedError
 
 
+def write_to_out(filename, const_dict, pars_dict, data_dict, fit_result=None):
+    """
+    Write fit results, parameter values, and calculated/observed/difference
+    values to a .out file.
+    """
+
+    calc = data_dict['calculated_magnetizations']
+    obs = data_dict['magnetizations']
+    times = data_dict['time_points']
+    n_sites = const_dict['n_sites']
+
+    with open(filename, "w") as out:
+        out.write("Final Values of Fitted Parameters:\n")
+        for i in range(n_sites):
+            out.write(f"R1_{i+1}: {pars_dict['r1_guess'][i]:.6f} "
+                      f"(vary: {pars_dict['r1_vary'][i]})\n")
+            out.write(f"Minf_{i+1}: {pars_dict['minf_guess'][i]:.6f} "
+                      f"(vary: {pars_dict['minf_vary'][i]})\n")
+            out.write(f"M0_{i+1}: {pars_dict['m0_guess'][i]:.6f} "
+                      f"(vary: {pars_dict['m0_vary'][i]})\n")
+        for i in range(const_dict['n_procs']):
+            out.write(f"Rate_{i+1}: {pars_dict['k_guess'][i]:.6f} "
+                      f"(vary: {pars_dict['k_vary'][i]})\n")
+        out.write("\n")
+
+        if fit_result is not None:
+            out.write("Fit Report:\n")
+            out.write(fit_result.fit_report())
+            out.write("\n")
+
+        out.write("Calculated, Observed, and Difference Values\n")
+        chisq = 0.0
+        for i, time in enumerate(times):
+            out.write(f"{time:8.5f}  Calcd:")
+            for j in range(n_sites):
+                out.write(f" {calc[i, j]:8.4f}")
+            out.write("\n         Obsd:")
+            for j in range(n_sites):
+                out.write(f" {obs[i, j]:8.4f}")
+            out.write("\n         Diff:")
+            for j in range(n_sites):
+                diff = calc[i, j] - obs[i, j]
+                out.write(f" {diff:8.4f}")
+                chisq += diff * diff
+            out.write("\n\n")
+
+        dof = obs.size - sum(pars_dict['r1_vary'] + pars_dict['minf_vary']
+                             + pars_dict['m0_vary'] + pars_dict['k_vary'])
+        out.write(f"Raw chi squared = {chisq:16.9f}\n")
+        if dof > 0:
+            out.write(f"Reduced chi squared = {chisq/dof:16.9f}\n")
+            out.write(f"Percent Sqrt((reduced chisq)) = "
+                      f"{100 * np.sqrt(chisq/dof):10.4f}\n")
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="CIFIT: A program for fitting"
                                      " selective inversion experiment data.")
