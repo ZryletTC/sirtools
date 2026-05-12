@@ -266,18 +266,32 @@ def do_fit(const_dict, pars_dict, data_dict):
     for i in range(n_sites):
         params.add(f"r1_{i}", value=pars_dict['r1_value'][i],
                    vary=pars_dict['r1_vary'][i],
+<<<<<<< HEAD
                    max=100*pars_dict['r1_value'][i], min=0)
         params.add(f"minf_{i}", value=pars_dict['minf_value'][i],
+=======
+                   max=1e5, min=.001)
+        params.add(f"minf_{i}", value=pars_dict['minf_guess'][i],
+>>>>>>> 229b5dc (ENH: Use better param constraints and output smoother fit curve)
                    vary=pars_dict['minf_vary'][i], max=1.2,
                    min=0.88)
         params.add(f"m0_{i}", value=pars_dict['m0_value'][i],
                    vary=pars_dict['m0_vary'][i],
+<<<<<<< HEAD
                    max=pars_dict['minf_value'][i],
                    min=-pars_dict['minf_value'][i])
+=======
+                   max=max(0.8*pars_dict['m0_guess'][i], 1.2*pars_dict['m0_guess'][i]),
+                   min=min(0.8*pars_dict['m0_guess'][i], 1.2*pars_dict['m0_guess'][i]))
+>>>>>>> 229b5dc (ENH: Use better param constraints and output smoother fit curve)
     for i in range(n_procs):
         params.add(f"rate_{i}", value=pars_dict['k_value'][i],
                    vary=pars_dict['k_vary'][i],
+<<<<<<< HEAD
                    max=100*pars_dict['k_value'][i], min=0)
+=======
+                   max=100*pars_dict['k_guess'][i], min=1e-6)
+>>>>>>> 229b5dc (ENH: Use better param constraints and output smoother fit curve)
 
     # Run minimization
     result = minimize(sir_residuals, params, args=(const_dict, data_dict),
@@ -374,7 +388,7 @@ def write_to_csv(filename, const_dict, pars_dict, data_dict):
 
         time_0 = 0.0
         time_f = data_dict['time_points'][-1]
-        times_smooth = np.linspace(time_0, time_f, 101)[np.newaxis]
+        times_smooth = np.linspace(time_0, time_f, 1001)[np.newaxis]
         mags_smooth = calc_mags(const_dict, pars_dict, times_smooth.flatten())
 
         smooth_data = np.concatenate((times_smooth.T, mags_smooth), axis=1)
