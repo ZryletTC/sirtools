@@ -3,6 +3,7 @@
 import argparse
 
 import numpy as np
+import scipy
 from lmfit import Parameters, minimize, report_fit
 
 VERSION = "0.1"  # TODO: Update to dynamic versioning from package
@@ -225,15 +226,20 @@ def model_magnetization(params, const_dict, time_points):
             if j != i:
                 exch_mat[i, i] -= exch_mat[i, j]
 
-    # Eigen decomposition
-    eigvals, eigvecs = np.linalg.eig(exch_mat)
-    eigvecs_inv = np.linalg.inv(eigvecs)
+    # # Eigen decomposition
+    # eigvals, eigvecs = np.linalg.eig(exch_mat)
+    # eigvecs_inv = np.linalg.inv(eigvecs)
 
-    # Calculate magnetization for each time point and site
+    # # Calculate magnetization for each time point and site
+    # mags = np.zeros((n_points, n_sites))
+    # for i, t in enumerate(time_points):
+    #     exp_diag = np.diag(np.exp(-eigvals * t))
+    #     mags[i, :] = eigvecs @ exp_diag @ eigvecs_inv @ m0minf + minf
+
+    # w/o eigen decomposition?
     mags = np.zeros((n_points, n_sites))
     for i, t in enumerate(time_points):
-        exp_diag = np.diag(np.exp(-eigvals * t))
-        mags[i, :] = eigvecs @ exp_diag @ eigvecs_inv @ m0minf + minf
+        mags[i, :] = scipy.linalg.expm(-exch_mat * t) @ m0minf + minf
 
     return mags
 
