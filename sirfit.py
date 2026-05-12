@@ -79,7 +79,7 @@ def read_mch_file(filename, specify_vary=False):
             exch_mat[row, col] = val
 
         process = {
-            'k_guess': k_guess,
+            'k_value': k_guess,
             'k_vary': k_vary,
             'matrix': exch_mat
         }
@@ -116,19 +116,18 @@ def read_mch_file(filename, specify_vary=False):
         'matrices': []
     }
 
-    # TODO: Remove 'guess' from key names
     pars_dict = {
-        'r1_guess': r1_guess,
+        'r1_value': r1_guess,
         'r1_vary': r1_vary,
-        'minf_guess': minf_guess,
+        'minf_value': minf_guess,
         'minf_vary': minf_vary,
-        'm0_guess': m0_guess,
+        'm0_value': m0_guess,
         'm0_vary': m0_vary,
-        'k_guess': [],
+        'k_value': [],
         'k_vary': []
     }
     for proc in processes:
-        pars_dict['k_guess'].append(proc['k_guess'])
+        pars_dict['k_value'].append(proc['k_guess'])
         pars_dict['k_vary'].append(proc['k_vary'])
         const_dict['matrices'].append(proc['matrix'])
 
@@ -175,17 +174,17 @@ def print_parameters(const_dict, pars_dict):
     print(f"Number of sites: {const_dict['n_sites']}")
     for i in range(const_dict['n_sites']):
         print(f"Site {i+1}:")
-        print(f"  R1 relaxation rate: {pars_dict['r1_guess'][i]:.4f}, "
+        print(f"  R1 relaxation rate: {pars_dict['r1_value'][i]:.4f}, "
               f"vary: {pars_dict['r1_vary'][i]}")
-        print(f"  M_inf: {pars_dict['minf_guess'][i]}, "
+        print(f"  M_inf: {pars_dict['minf_value'][i]}, "
               f"vary: {pars_dict['minf_vary'][i]}")
-        print(f"  M_0: {pars_dict['m0_guess'][i]}, "
+        print(f"  M_0: {pars_dict['m0_value'][i]}, "
               f"vary: {pars_dict['m0_vary'][i]}")
         print()
 
     print(f"Number of processes: {const_dict['n_procs']}")
     for i in range(const_dict['n_procs']):
-        print(f"Process {i+1}: k = {pars_dict['k_guess'][i]}, "
+        print(f"Process {i+1}: k = {pars_dict['k_value'][i]}, "
               f"vary = {pars_dict['k_vary'][i]}")
         print("Process matrix:")
         print(const_dict['matrices'][i])
@@ -257,20 +256,20 @@ def do_fit(const_dict, pars_dict, data_dict):
     # Build lmfit Parameters object
     params = Parameters()
     for i in range(n_sites):
-        params.add(f"r1_{i}", value=pars_dict['r1_guess'][i],
+        params.add(f"r1_{i}", value=pars_dict['r1_value'][i],
                    vary=pars_dict['r1_vary'][i],
-                   max=100*pars_dict['r1_guess'][i], min=0)
-        params.add(f"minf_{i}", value=pars_dict['minf_guess'][i],
+                   max=100*pars_dict['r1_value'][i], min=0)
+        params.add(f"minf_{i}", value=pars_dict['minf_value'][i],
                    vary=pars_dict['minf_vary'][i], max=1.2,
                    min=0.88)
-        params.add(f"m0_{i}", value=pars_dict['m0_guess'][i],
+        params.add(f"m0_{i}", value=pars_dict['m0_value'][i],
                    vary=pars_dict['m0_vary'][i],
-                   max=pars_dict['minf_guess'][i],
-                   min=-pars_dict['minf_guess'][i])
+                   max=pars_dict['minf_value'][i],
+                   min=-pars_dict['minf_value'][i])
     for i in range(n_procs):
-        params.add(f"rate_{i}", value=pars_dict['k_guess'][i],
+        params.add(f"rate_{i}", value=pars_dict['k_value'][i],
                    vary=pars_dict['k_vary'][i],
-                   max=100*pars_dict['k_guess'][i], min=0)
+                   max=100*pars_dict['k_value'][i], min=0)
 
     # Run minimization
     result = minimize(sir_residuals, params, args=(const_dict, data_dict),
@@ -281,11 +280,11 @@ def do_fit(const_dict, pars_dict, data_dict):
 
     # Update pars_dict with fitted values
     for i in range(n_sites):
-        pars_dict['r1_guess'][i] = result.params[f"r1_{i}"].value
-        pars_dict['minf_guess'][i] = result.params[f"minf_{i}"].value
-        pars_dict['m0_guess'][i] = result.params[f"m0_{i}"].value
+        pars_dict['r1_value'][i] = result.params[f"r1_{i}"].value
+        pars_dict['minf_value'][i] = result.params[f"minf_{i}"].value
+        pars_dict['m0_value'][i] = result.params[f"m0_{i}"].value
     for i in range(n_procs):
-        pars_dict['k_guess'][i] = result.params[f"rate_{i}"].value
+        pars_dict['k_value'][i] = result.params[f"rate_{i}"].value
 
     data_dict['calculated_magnetizations'] = model_magnetization(
         result.params, const_dict, data_dict['time_points'])
@@ -301,14 +300,14 @@ def calc_mags(const_dict, pars_dict, time_points):
 
     params = Parameters()
     for i in range(const_dict['n_sites']):
-        params.add(f"r1_{i}", value=pars_dict['r1_guess'][i],
+        params.add(f"r1_{i}", value=pars_dict['r1_value'][i],
                    vary=pars_dict['r1_vary'][i])
-        params.add(f"minf_{i}", value=pars_dict['minf_guess'][i],
+        params.add(f"minf_{i}", value=pars_dict['minf_value'][i],
                    vary=pars_dict['minf_vary'][i])
-        params.add(f"m0_{i}", value=pars_dict['m0_guess'][i],
+        params.add(f"m0_{i}", value=pars_dict['m0_value'][i],
                    vary=pars_dict['m0_vary'][i])
     for i in range(const_dict['n_procs']):
-        params.add(f"rate_{i}", value=pars_dict['k_guess'][i],
+        params.add(f"rate_{i}", value=pars_dict['k_value'][i],
                    vary=pars_dict['k_vary'][i])
 
     return model_magnetization(params, const_dict, time_points)
@@ -377,14 +376,14 @@ def write_to_out(filename, const_dict, pars_dict, data_dict, fit_result=None):
     with open(filename, "w") as out:
         out.write("Final Values of Fitted Parameters:\n")
         for i in range(n_sites):
-            out.write(f"R1_{i+1}: {pars_dict['r1_guess'][i]:.6f} "
+            out.write(f"R1_{i+1}: {pars_dict['r1_value'][i]:.6f} "
                       f"(vary: {pars_dict['r1_vary'][i]})\n")
-            out.write(f"Minf_{i+1}: {pars_dict['minf_guess'][i]:.6f} "
+            out.write(f"Minf_{i+1}: {pars_dict['minf_value'][i]:.6f} "
                       f"(vary: {pars_dict['minf_vary'][i]})\n")
-            out.write(f"M0_{i+1}: {pars_dict['m0_guess'][i]:.6f} "
+            out.write(f"M0_{i+1}: {pars_dict['m0_value'][i]:.6f} "
                       f"(vary: {pars_dict['m0_vary'][i]})\n")
         for i in range(const_dict['n_procs']):
-            out.write(f"Rate_{i+1}: {pars_dict['k_guess'][i]:.6f} "
+            out.write(f"Rate_{i+1}: {pars_dict['k_value'][i]:.6f} "
                       f"(vary: {pars_dict['k_vary'][i]})\n")
         out.write("\n")
 
