@@ -362,7 +362,7 @@ def write_to_csv(filename, const_dict, pars_dict, data_dict):
     user_vals.extend(map(float, input("Enter start time, final time, increment:")))
     while len(user_vals) < 3:
         user_vals.extend(map(float, input("")))
-    start, end, inc = user_vals[:3]
+    start, end, inc = user_vals[0], user_vals[1], user_vals[2]
 
     with open(filename, "w", newline="", encoding="utf-8") as csvfile:
         # writer = csv.writer(csvfile, delimiter='')
@@ -389,9 +389,10 @@ def write_to_csv(filename, const_dict, pars_dict, data_dict):
         # Smooth curve
         csvfile.write("\nCalculated Smooth Curve\n")
 
-        time_0 = 0.0
-        time_f = data_dict["time_points"][-1]
-        times_smooth = np.linspace(time_0, time_f, 101)[np.newaxis]
+        # time_0 = 0.0
+        # time_f = data_dict["time_points"][-1]
+        # times_smooth = np.linspace(time_0, time_f, 101)[np.newaxis]
+        times_smooth = np.arange(start, end, inc)[np.newaxis]
         mags_smooth = calc_mags(const_dict, pars_dict, times_smooth.flatten())
 
         smooth_data = np.concatenate((times_smooth.T, mags_smooth), axis=1)
