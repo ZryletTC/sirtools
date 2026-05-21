@@ -40,12 +40,22 @@ def read_mch_params(lines, n_expected, specify_vary=False):
         otherwise None.
     """
 
-    param_guess = list(map(float, next(lines).split()))
-    assert len(param_guess) == n_expected
+    next_line = next(lines)
+    param_guess = list(map(float, next_line.split()))
+    if len(param_guess) != n_expected:
+        raise ValueError(
+            f"Expected {n_expected} parameter values, but got {len(param_guess)}: "
+            f"{next_line}"
+        )
 
     if specify_vary:
-        param_vary = list(map(bool, map(int, next(lines).split())))
-        assert len(param_vary) == n_expected
+        next_line = next(lines)
+        param_vary = list(map(bool, map(int, next_line.split())))
+        if len(param_vary) != n_expected:
+            raise ValueError(
+                f"Expected {n_expected} vary flags, but got {len(param_vary)}: "
+                f"{next_line}"
+            )
     else:
         param_vary = None
 
@@ -173,9 +183,8 @@ def read_mch_file(filename, specify_vary=False):
         pars_dict["k_vary"].append(proc["k_vary"])
         const_dict["matrices"].append(proc["matrix"])
 
-    assert all(
-        isinstance(vary, bool) for vary in r1_vary + minf_vary + m0_vary
-    ), "All vary parameters should be boolean values."
+    if not all(isinstance(vary, bool) for vary in r1_vary + minf_vary + m0_vary):
+        raise ValueError("All vary parameters must be boolean values.")
 
     return const_dict, pars_dict
 
@@ -624,7 +633,7 @@ def write_to_out(filename, *, const_dict, pars_dict, data_dict, fit_result=None)
             )
         out.write("\n")
 
-        if fit_result is not None:
+        if fit_result:
             out.write("Fit Report:\n")
             out.write(fit_result.fit_report())
             out.write("\n")
