@@ -1,4 +1,13 @@
 #!/usr/bin/env python3
+"""
+Command-line fitting utility for SIR experiment data.
+
+This module provides functions to read .mch and .dat files,
+perform nonlinear least-squares fitting with lmfit, and write fit
+results to CSV or output files.
+
+This is a Python implementation of the CIFIT2.C program.
+"""
 
 import argparse
 import sys
@@ -11,11 +20,24 @@ VERSION = "0.1"  # TODO: Update to dynamic versioning from package
 
 def read_mch_params(lines, n_expected, specify_vary=False):
     """
-    Reads a line from the given iterator `lines` and returns the parameters.
+    Parse a parameter line from a CIFIT mechanism file.
 
-    If `specify_vary` is True, it also reads whether the parameters should be
-    varied from the next line. Otherwise, it assumes the user will be asked
-    about constraints later.
+    Parameters
+    ----------
+    lines : iterator
+        Iterator over stripped, non-empty lines from a .mch file.
+    n_expected : int
+        Expected number of parameter values on the current line.
+    specify_vary : bool, default: False
+        If True, read a second line containing vary flags for the parameters.
+
+    Returns
+    -------
+    param_guess : list of float
+        List of parameter guesses parsed from the file.
+    param_vary : list of bool or None
+        List of vary flags corresponding to the parameters if specify_vary is True,
+        otherwise None.
     """
 
     param_guess = list(map(float, next(lines).split()))
@@ -31,6 +53,31 @@ def read_mch_params(lines, n_expected, specify_vary=False):
 
 
 def read_mch_file(filename, specify_vary=False):
+    """
+    Read a CIFIT mechanism (.mch) file and return fitting configuration.
+
+    See cifman.pdf for the expected format of the .mch file. If using these
+    specifications, the .mch file should not include vary flags for each parameter, so
+    leave specify_vary=False.
+
+    Parameters
+    ----------
+    filename : str
+        Path to the .mch mechanism file.
+    specify_vary : bool, optional
+        If True, parse parameter-vary flags from the file. If False, prompt
+        the user for vary flags interactively, by default False.
+
+    Returns
+    -------
+    const_dict : dict
+        Dictionary containing mechanism metadata which does not change during fitting,
+        including the title, number of sites and processes, and process matrices.
+    pars_dict : dict
+        Dictionary containing parameter guesses and vary flags for R1, Minf, M0, and k
+        values for each site and process.
+    """
+
     print(f"Specifying vary: {specify_vary}")
     with open(filename, "r", encoding="utf-8") as file:
         lines = file.readlines()
@@ -134,6 +181,21 @@ def read_mch_file(filename, specify_vary=False):
 
 
 def read_data_file(filename):
+    """
+    Read a CIFIT data (.dat) file and return the dataset.
+
+    Parameters
+    ----------
+    filename : str
+        Path to the .dat data file.
+
+    Returns
+    -------
+    dict
+        Dictionary containing title, number of points, time points, and
+        observed magnetization values.
+    """
+
     with open(filename, "r", encoding="utf-8") as file:
         lines = file.readlines()
 
@@ -168,6 +230,19 @@ def read_data_file(filename):
 
 
 def print_parameters(const_dict, pars_dict):
+    """
+    Print fitted parameter values and process matrices to standard output.
+
+    Parameters
+    ----------
+    const_dict : dict
+        Dictionary containing mechanism metadata which does not change during fitting,
+        including the title, number of sites and processes, and process matrices.
+    pars_dict : dict
+        Dictionary containing parameter guesses and vary flags for R1, Minf, M0, and k
+        values for each site and process.
+    """
+
     print(f"Number of sites: {const_dict['n_sites']}")
     for i in range(const_dict["n_sites"]):
         print(f"Site {i+1}:")
@@ -195,13 +270,22 @@ def print_parameters(const_dict, pars_dict):
 
 def model_magnetization(params, const_dict, time_points):
     """
-    Compute the model magnetization for all time points and sites.
+    Compute the modeled magnetization for all sites at given time points.
 
-    params: lmfit.Parameters object
-    const_dict: mechanism dictionary
-    time_points: list of time points to calculate magnetization for
+    Parameters
+    ----------
+    params : lmfit.Parameters
+        Fit parameters including rate, minf, m0, and k values.
+    const_dict : dict
+        Dictionary containing mechanism metadata which does not change during fitting,
+        including the title, number of sites and processes, and process matrices.
+    time_points : array-like
+        Sequence of time values at which to compute magnetization.
 
-    Returns: 2D array of calculated magnetizations.
+    Returns
+    -------
+    ndarray
+        Array of shape (n_time_points, n_sites) containing modeled magnetization values.
     """
 
     n_sites = const_dict["n_sites"]
@@ -241,6 +325,26 @@ def model_magnetization(params, const_dict, time_points):
 
 
 def sir_residuals(params, const_dict, data_dict):
+    """
+    Compute residuals between observed and modeled magnetization values.
+
+    Parameters
+    ----------
+    params : lmfit.Parameters
+        Current fit parameters.
+    const_dict : dict
+        Dictionary containing mechanism metadata which does not change during fitting,
+        including the title, number of sites and processes, and process matrices.
+    data_dict : dict
+        Dictionary containing title, number of points, time points, and
+        observed magnetization values.
+
+    Returns
+    -------
+    ndarray
+        Flattened residuals vector for use by lmfit.
+    """
+
     time_points = data_dict["time_points"]
     mags = model_magnetization(params, const_dict, time_points).flatten()
     obs = np.array(data_dict["magnetizations"]).flatten()
@@ -249,7 +353,24 @@ def sir_residuals(params, const_dict, data_dict):
 
 def do_fit(const_dict, pars_dict, data_dict):
     """
-    Perform the nonlinear least squares fit using lmfit.
+    Perform nonlinear least squares fitting using lmfit.
+
+    Parameters
+    ----------
+    const_dict : dict
+        Dictionary containing mechanism metadata which does not change during fitting,
+        including the title, number of sites and processes, and process matrices.
+    pars_dict : dict
+        Dictionary containing parameter guesses and vary flags for R1, Minf, M0, and k
+        values for each site and process.
+    data_dict : dict
+        Dictionary containing title, number of points, time points, and
+        observed magnetization values.
+
+    Returns
+    -------
+    lmfit.MinimizerResult
+        Result object from lmfit containing optimized parameter values.
     """
 
     n_sites = const_dict["n_sites"]
@@ -313,8 +434,24 @@ def do_fit(const_dict, pars_dict, data_dict):
 
 def calc_mags(const_dict, pars_dict, time_points):
     """
-    Calculate the magnetizations for all time points and sites.
-    Returns a 2D array of calculated magnetizations.
+    Calculate modeled magnetization values from current parameter values.
+
+    Parameters
+    ----------
+    const_dict : dict
+        Dictionary containing mechanism metadata which does not change during fitting,
+        including the title, number of sites and processes, and process matrices.
+    pars_dict : dict
+        Dictionary containing parameter guesses and vary flags for R1, Minf, M0, and k
+        values for each site and process.
+    time_points : array-like
+        Time points at which to calculate the magnetization values.
+
+    Returns
+    -------
+    ndarray
+        Array of calculated magnetization values for each site at each time point, with
+        shape (n_time_points, n_sites).
     """
 
     params = Parameters()
@@ -339,6 +476,22 @@ def calc_mags(const_dict, pars_dict, time_points):
 
 
 def ask_for_filename(prompt, mode):
+    """
+    Prompt the user for a filename and verify it can be opened.
+
+    Parameters
+    ----------
+    prompt : str
+        Prompt text displayed to the user.
+    mode : str
+        File mode used to validate access e.g. 'r' or 'w'.
+
+    Returns
+    -------
+    str
+        The validated filename entered by the user.
+    """
+
     # TODO: Future -- Keep asking for filename if it fails
     filename = input(prompt + ": ")
 
@@ -354,9 +507,27 @@ def ask_for_filename(prompt, mode):
 
 def write_to_csv(filename, *, const_dict, pars_dict, data_dict):
     """
-    Write calculated, observed, and difference values, plus a smooth curve,
-    to a CSV file.
+    Write fit results and a smooth calculated curve to a CSV file.
+
+    Fit results are presented as calculated, observed, and difference values at each
+    time point, formatted as:
+    time, calc1, calc2, ..., obs1, obs2, ..., diff1, diff2, ...
+
+    Parameters
+    ----------
+    filename : str
+        Destination CSV filename, including the extension if desired.
+    const_dict : dict
+        Dictionary containing mechanism metadata which does not change during fitting,
+        including the title, number of sites and processes, and process matrices.
+    pars_dict : dict
+        Dictionary containing parameter guesses and vary flags for R1, Minf, M0, and k
+        values for each site and process.
+    data_dict : dict
+        Dictionary containing title, number of points, time points, and
+        observed magnetization values.
     """
+
     # TODO: Future -- Remove this question and just output a good fit
     user_vals = []
     user_vals.extend(map(float, input("Enter start time, final time, increment:")))
@@ -405,8 +576,23 @@ def write_to_csv(filename, *, const_dict, pars_dict, data_dict):
 
 def write_to_out(filename, *, const_dict, pars_dict, data_dict, fit_result=None):
     """
-    Write fit results, parameter values, and calculated/observed/difference
-    values to a .out file.
+    Write fit parameters and comparison data to an output file.
+
+    Parameters
+    ----------
+    filename : str
+        Output filename to write, including the desired extension if any.
+    const_dict : dict
+        Dictionary containing mechanism metadata which does not change during fitting,
+        including the title, number of sites and processes, and process matrices.
+    pars_dict : dict
+        Dictionary containing parameter guesses and vary flags for R1, Minf, M0, and k
+        values for each site and process.
+    data_dict : dict
+        Dictionary containing title, number of points, time points, and
+        observed magnetization values.
+    fit_result : lmfit.MinimizerResult, optional
+        Fit result object whose report is included if provided.
     """
 
     calc = data_dict["calculated_magnetizations"]
@@ -473,6 +659,15 @@ def write_to_out(filename, *, const_dict, pars_dict, data_dict, fit_result=None)
 
 
 def parse_args():
+    """
+    Parse command-line arguments for the sirfit utility.
+
+    Returns
+    -------
+    argparse.Namespace
+        Parsed command-line arguments.
+    """
+
     parser = argparse.ArgumentParser(
         description="CIFIT: A program for fitting"
         " selective inversion experiment data."
@@ -492,6 +687,17 @@ def parse_args():
 
 
 def main():
+    """
+    Run the sirfit command-line workflow.
+
+    Reads input mechanism and data files, performs the fit, and optionally writes output
+    and CSV files.
+
+    Returns
+    -------
+    int
+        Exit status code (0 on success, nonzero on error).
+    """
     # TODO: Add writing to out
     args = parse_args()
     print(f"sirfit {VERSION}")
