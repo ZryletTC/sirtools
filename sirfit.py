@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import sys
 
 import numpy as np
 from lmfit import Parameters, minimize, report_fit
@@ -92,8 +93,7 @@ def read_mch_file(filename, specify_vary=False):
                     if resp in ("y", "n", "yes", "no"):
                         vary.append(resp[0] == "y")
                         break
-                    else:
-                        print("Please enter 'y' or 'n'.")
+                    print("Please enter 'y' or 'n'.")
             return vary
 
         r1_vary = ask_vary("R1", r1_guess)
@@ -127,7 +127,7 @@ def read_mch_file(filename, specify_vary=False):
         const_dict["matrices"].append(proc["matrix"])
 
     assert all(
-        type(vary) is bool for vary in r1_vary + minf_vary + m0_vary
+        isinstance(vary, bool) for vary in r1_vary + minf_vary + m0_vary
     ), "All vary parameters should be boolean values."
 
     return const_dict, pars_dict
@@ -347,12 +347,12 @@ def ask_for_filename(prompt, mode):
             pass
     except OSError:
         print(f"cannot open file {prompt} .")
-        exit(1)
+        sys.exit(1)
 
     return filename
 
 
-def write_to_csv(filename, const_dict, pars_dict, data_dict):
+def write_to_csv(filename, *, const_dict, pars_dict, data_dict):
     """
     Write calculated, observed, and difference values, plus a smooth curve,
     to a CSV file.
@@ -403,7 +403,7 @@ def write_to_csv(filename, const_dict, pars_dict, data_dict):
             csvfile.write("\n")
 
 
-def write_to_out(filename, const_dict, pars_dict, data_dict, fit_result=None):
+def write_to_out(filename, *, const_dict, pars_dict, data_dict, fit_result=None):
     """
     Write fit results, parameter values, and calculated/observed/difference
     values to a .out file.
@@ -492,6 +492,7 @@ def parse_args():
 
 
 def main():
+    # TODO: Add writing to out
     args = parse_args()
     print(f"sirfit {VERSION}")
 
@@ -549,7 +550,14 @@ def main():
     # if ((make_csv[0] == 'y') || (make_csv[0] == 'Y'))
     if make_csv:
         csv_filename = ask_for_filename("Plot file", "w")
-        write_to_csv(csv_filename, const_dict, pars_dict, data_dict)
+        write_to_csv(
+            csv_filename,
+            const_dict=const_dict,
+            pars_dict=pars_dict,
+            data_dict=data_dict,
+        )
+
+    return 0
 
 
 if __name__ == "__main__":
