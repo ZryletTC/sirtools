@@ -180,7 +180,7 @@ def read_mch_file(filename, specify_vary=False):
     return const_dict, pars_dict
 
 
-def read_data_file(filename):
+def read_dat_file(filename):
     """
     Read a CIFIT data (.dat) file and return the dataset.
 
@@ -191,7 +191,7 @@ def read_data_file(filename):
 
     Returns
     -------
-    dict
+    data_dict : dict
         Dictionary containing title, number of points, time points, and
         observed magnetization values.
     """
@@ -221,12 +221,14 @@ def read_data_file(filename):
         # Remaining elements are the magnetization values
         data_values.append(list(map(float, line[1:])))
 
-    return {
+    data_dict = {
         "title": data_title,
         "n_points": n_points,
         "time_points": time_points,
         "magnetizations": np.array(data_values),
     }
+
+    return data_dict
 
 
 def print_parameters(const_dict, pars_dict):
@@ -741,7 +743,7 @@ def main():
 
     # Read mechanism and data files
     const_dict, pars_dict = read_mch_file(mech_filename, specify_vary=args.specify_vary)
-    data_dict = read_data_file(data_filename)
+    data_dict = read_dat_file(data_filename)
     print_parameters(const_dict, pars_dict)
 
     # Run fitting
