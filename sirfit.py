@@ -31,7 +31,7 @@ def read_mch_params(lines, n_expected, specify_vary=False):
 
 def read_mch_file(filename, specify_vary=False):
     print(f"Specifying vary: {specify_vary}")
-    with open(filename, "r") as file:
+    with open(filename, "r", encoding="utf-8") as file:
         lines = file.readlines()
 
     lines = iter(
@@ -69,7 +69,7 @@ def read_mch_file(filename, specify_vary=False):
         # Read the nonzero off-diagonals associated with the process,
         # and add them to the matrix
         n_off_diagonals = int(next(lines))
-        for j in range(n_off_diagonals):
+        for _ in range(n_off_diagonals):
             row_str, col_str, val_str = next(lines).split()
             row = int(row_str)  # Row of off-diagonal element
             col = int(col_str)  # Column of off-diagonal element
@@ -134,7 +134,7 @@ def read_mch_file(filename, specify_vary=False):
 
 
 def read_data_file(filename):
-    with open(filename, "r") as file:
+    with open(filename, "r", encoding="utf-8") as file:
         lines = file.readlines()
 
     lines = iter(
@@ -152,7 +152,7 @@ def read_data_file(filename):
     time_points = []
     data_values = []
 
-    for i in range(n_points):
+    for _ in range(n_points):
         line = next(lines).split()
         # First element is the time point
         time_points.append(float(line[0]))
@@ -343,7 +343,7 @@ def ask_for_filename(prompt, mode):
     filename = input(prompt + ": ")
 
     try:
-        with open(filename, mode):
+        with open(filename, mode, encoding="utf-8"):
             pass
     except OSError:
         print(f"cannot open file {prompt} .")
@@ -364,7 +364,7 @@ def write_to_csv(filename, const_dict, pars_dict, data_dict):
         user_vals.extend(map(float, input("")))
     start, end, inc = user_vals[:3]
 
-    with open(filename, "w", newline="") as csvfile:
+    with open(filename, "w", newline="", encoding="utf-8") as csvfile:
         # writer = csv.writer(csvfile, delimiter='')
         # writer.writerow(["Calculated, Observed, and Difference Values"])
         csvfile.write("Calculated, Observed, and Difference Values\n")
@@ -413,7 +413,7 @@ def write_to_out(filename, const_dict, pars_dict, data_dict, fit_result=None):
     times = data_dict["time_points"]
     n_sites = const_dict["n_sites"]
 
-    with open(filename, "w") as out:
+    with open(filename, "w", encoding="utf-8") as out:
         out.write("Final Values of Fitted Parameters:\n")
         for i in range(n_sites):
             out.write(
@@ -503,11 +503,14 @@ def main():
 
         # Check if files exist and are readable/writable
         try:
-            with open(data_filename, "r"), open(mech_filename, "r"):
+            with (
+                open(data_filename, "r", encoding="utf-8"),
+                open(mech_filename, "r", encoding="utf-8"),
+            ):
                 pass
             print(f"Mechanism file: {mech_filename}")
             print(f"Data file: {data_filename}")
-        except Exception as e:
+        except OSError as e:
             print(f"Error opening files: {e}")
             return 1
     else:
@@ -517,14 +520,14 @@ def main():
         # csv_filename = None
 
     try:
-        with open(out_filename, "w") as outfile:
+        with open(out_filename, "w", encoding="utf-8") as outfile:
             outfile.write(f"sirfit {VERSION}")
             outfile.write(f"Mechanism file: {mech_filename}")
             outfile.write(f"Data file: {data_filename}")
 
             # print(f"Output file: {out_filename}")
 
-    except Exception as e:
+    except OSError as e:
         print(f"Error creating output file: {e}")
         return 1
 
